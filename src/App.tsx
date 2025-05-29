@@ -5,11 +5,16 @@ import { derivePath } from "ed25519-hd-key";
 import nacl from "tweetnacl";
 import { Keypair } from "@solana/web3.js";
 import { generateMnemonic, mnemonicToSeedSync } from "bip39";
+import { Button } from "./component/Button";
+import { Word } from "./component/Word";
+import { Wallet } from "./component/Wallet";
 
 type WalletType = {
 	id: number;
-	publickey: string;
-	privateKey: Uint8Array;
+	Solpublic: string;
+	Solprivate: Uint8Array;
+	Ethpublic: string;
+	Ethprivate: Uint8Array;
 };
 
 function App() {
@@ -19,9 +24,12 @@ function App() {
 	const [showMnemonic, setShowMnemonic] = useState(false);
 	const [id, setId] = useState(0);
 	const [loading, setLoading] = useState(false);
+
 	const toggleMnemonic = () => {
 		setShowMnemonic(!showMnemonic);
 	};
+
+	const TypesOfchoices = [{ Sol: 501 }, { Eth: 60 }];
 
 	const CreateWallet = async () => {
 		setLoading(true);
@@ -33,12 +41,20 @@ function App() {
 
 			const newSeed = mnemonicToSeedSync(newMnemonic);
 			setSeed(newSeed);
-			const path = `m/44'/501'/${id}'/0'`;
-			const { key } = derivePath(path, newSeed.toString("hex"));
-			const secret = nacl.sign.keyPair.fromSeed(key).secretKey;
-			const publick = Keypair.fromSecretKey(secret).publicKey.toBase58();
 
-			setWal([{ id: 0, publickey: publick, privateKey: secret }]);
+			const currentWallet: Partial<WalletType> = { id: 0 };
+			TypesOfchoices.forEach((choice) => {
+				const path = `m/44'/${Object.values(choice)[0]}'/0'/0'`;
+				const { key } = derivePath(path, newSeed.toString("hex"));
+				const secret = nacl.sign.keyPair.fromSeed(key).secretKey;
+				const publicKey = Keypair.fromSecretKey(secret).publicKey.toBase58();
+				//@ts-ignore
+				currentWallet[`${Object.keys(choice)[0]}public` as keyof WalletType] = publicKey;
+				//@ts-ignore
+				currentWallet[`${Object.keys(choice)[0]}private` as keyof WalletType] = secret;
+			});
+
+			setWal([currentWallet as WalletType]);
 		} catch (error) {
 			console.error("Error creating wallet:", error);
 		} finally {
@@ -52,11 +68,20 @@ function App() {
 		try {
 			const nextId = id + 1;
 			setId(nextId);
-			const path = `m/44'/501'/${nextId}'/0'`;
-			const derivedSeed = derivePath(path, seed.toString("hex")).key;
-			const secret = nacl.sign.keyPair.fromSeed(derivedSeed.slice(0, 32)).secretKey;
-			const publick = Keypair.fromSecretKey(secret).publicKey.toBase58();
-			setWal((prev) => [...prev, { id: nextId, publickey: publick, privateKey: secret }]);
+
+			const newWallet: Partial<WalletType> = { id: nextId };
+			TypesOfchoices.forEach((choice) => {
+				const path = `m/44'/${Object.values(choice)[0]}'/${nextId}'/0'`;
+				const { key } = derivePath(path, seed.toString("hex"));
+				const secret = nacl.sign.keyPair.fromSeed(key).secretKey;
+				const publicKey = Keypair.fromSecretKey(secret).publicKey.toBase58();
+				//@ts-ignore
+				newWallet[`${Object.keys(choice)[0]}public` as keyof WalletType] = publicKey;
+				//@ts-ignore
+				newWallet[`${Object.keys(choice)[0]}private` as keyof WalletType] = secret;
+			});
+
+			setWal((prev) => [...prev, newWallet as WalletType]);
 		} catch (error) {
 			console.error("Error adding wallet:", error);
 		} finally {
@@ -68,11 +93,11 @@ function App() {
 		<div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white font-sans px-4 py-8">
 			<header className="mb-8 text-center">
 				<h1 className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-500">
-					Solana HD Wallet Generator
+					Web Based Wallet
 				</h1>
 				<p className="text-gray-300 max-w-2xl mx-auto">
-					Generate and manage hierarchical deterministic (HD) wallets for Solana from a single mnemonic phrase. Securely
-					store your mnemonic as it controls all generated wallets.
+					Generate and manage hierarchical deterministic (HD) wallets for multiple chains from a single mnemonic phrase.
+					Securely store your mnemonic as it controls all generated wallets.
 				</p>
 			</header>
 
@@ -91,11 +116,10 @@ function App() {
 						{seed.length > 0 && (
 							<div className="mt-6">
 								<div
-									className="flex items-center justify-between mb-3 hover:backdrop-brightness-75 p-4 rounded-2xl	"
+									className="flex items-center justify-between mb-3 hover:backdrop-brightness-75 p-4 rounded-2xl cursor-pointer"
 									onClick={toggleMnemonic}
 								>
 									<h2 className="text-xl font-semibold">Recovery Phrase</h2>
-									{/* here */}
 									<span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">🔒 Store Securely</span>
 								</div>
 								{showMnemonic ? (
@@ -111,7 +135,9 @@ function App() {
 										</p>
 									</>
 								) : (
-									""
+									<div className="bg-neutral-900/60 p-4 rounded-xl shadow text-center text-gray-400">
+										Click to reveal recovery phrase
+									</div>
 								)}
 							</div>
 						)}
@@ -131,7 +157,14 @@ function App() {
 								</div>
 							) : (
 								curWal.map((wal) => (
-									<Wallet key={wal.id} id={wal.id} privateKey={wal.privateKey} publicKey={wal.publickey} />
+									<Wallet
+										key={wal.id}
+										id={wal.id}
+										Solprivate={wal.Solprivate}
+										Solpublic={wal.Solpublic}
+										Ethprivate={wal.Ethprivate}
+										Ethpublic={wal.Ethpublic}
+									/>
 								))
 							)}
 						</div>
@@ -145,119 +178,5 @@ function App() {
 		</div>
 	);
 }
-
-const Button = ({
-	children,
-	onClick,
-	disabled,
-	loading,
-}: {
-	children: React.ReactNode;
-	onClick: () => void;
-	disabled?: boolean;
-	loading?: boolean;
-}) => (
-	<button
-		onClick={onClick}
-		disabled={disabled || loading}
-		className={`px-5 py-3 rounded-lg font-medium transition-all flex items-center justify-center min-w-40 ${
-			disabled
-				? "bg-gray-700 text-gray-500 cursor-not-allowed"
-				: "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg"
-		}`}
-	>
-		{loading ? (
-			<>
-				<svg
-					className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-				>
-					<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-					<path
-						className="opacity-75"
-						fill="currentColor"
-						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-					></path>
-				</svg>
-				Processing...
-			</>
-		) : (
-			children
-		)}
-	</button>
-);
-
-const Word = ({ id, word }: { id: number; word: string }) => (
-	<div className="flex items-center bg-slate-800 p-2 rounded-lg">
-		<span className="text-gray-400 text-xs mr-2 w-5">{id}.</span>
-		<span className="font-medium">{word}</span>
-	</div>
-);
-
-const Wallet = ({ id, privateKey, publicKey }: { id: number; privateKey: Uint8Array; publicKey: string }) => {
-	const privateKeyHex = Buffer.from(privateKey).toString("hex");
-	const [copied, setCopied] = useState<"none" | "private" | "public">("none");
-	const [showPrivateKey, setShowPrivateKey] = useState(false);
-
-	const handleCopy = (text: string, type: "private" | "public") => {
-		navigator.clipboard.writeText(text);
-		setCopied(type);
-		setTimeout(() => setCopied("none"), 1200);
-	};
-
-	return (
-		<div className="bg-neutral-900/80 rounded-xl p-5 shadow-lg border border-neutral-800 hover:border-indigo-500/30 transition-colors">
-			<div className="flex items-center justify-between mb-3">
-				<div className="flex items-center">
-					<div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center mr-3">
-						<span className="text-indigo-300 text-sm font-bold">{id}</span>
-					</div>
-					<h3 className="font-medium">Wallet #{id}</h3>
-				</div>
-				<div className="flex space-x-2">
-					<button
-						className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition text-gray-300"
-						onClick={() => setShowPrivateKey(!showPrivateKey)}
-					>
-						{showPrivateKey ? "Hide Private Key" : "Show Private Key"}
-					</button>
-				</div>
-			</div>
-
-			<div className="mb-3">
-				<div className="flex items-center justify-between mb-1">
-					<span className="text-sm text-gray-400">Public Key</span>
-					<button
-						className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition"
-						onClick={() => handleCopy(publicKey, "public")}
-					>
-						{copied === "public" ? "✓ Copied" : "Copy"}
-					</button>
-				</div>
-				<div className="bg-gray-800 p-2 rounded text-sm font-mono break-all text-green-400">{publicKey}</div>
-			</div>
-
-			{showPrivateKey && (
-				<div>
-					<div className="flex items-center justify-between mb-1">
-						<span className="text-sm text-gray-400">Private Key</span>
-						<button
-							className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition"
-							onClick={() => handleCopy(privateKeyHex, "private")}
-						>
-							{copied === "private" ? "✓ Copied" : "Copy"}
-						</button>
-					</div>
-					<div className="bg-gray-800 p-2 rounded text-sm font-mono break-all text-gray-300">{privateKeyHex}</div>
-					<p className="text-xs text-red-400 mt-1">
-						⚠️ Never share your private key! Anyone with this can access your funds.
-					</p>
-				</div>
-			)}
-		</div>
-	);
-};
 
 export default App;
