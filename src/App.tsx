@@ -1,20 +1,21 @@
 import { useState } from "react";
 import "./App.css";
-
 import { derivePath } from "ed25519-hd-key";
 import nacl from "tweetnacl";
 import { Keypair } from "@solana/web3.js";
 import { generateMnemonic, mnemonicToSeedSync } from "bip39";
+import { HDNodeWallet } from "ethers";
 import { Button } from "./component/Button";
 import { Word } from "./component/Word";
-import { Wallet } from "./component/Wallet";
+import { Balance } from "./component/Balance";
+import { DisplayWallet } from "./component/Wallet";
 
 type WalletType = {
 	id: number;
 	Solpublic: string;
-	Solprivate: Uint8Array;
+	Solprivate: string;
 	Ethpublic: string;
-	Ethprivate: Uint8Array;
+	Ethprivate: string;
 };
 
 function App() {
@@ -29,8 +30,6 @@ function App() {
 		setShowMnemonic(!showMnemonic);
 	};
 
-	const TypesOfchoices = [{ Sol: 501 }, { Eth: 60 }];
-
 	const CreateWallet = async () => {
 		setLoading(true);
 		try {
@@ -43,16 +42,20 @@ function App() {
 			setSeed(newSeed);
 
 			const currentWallet: Partial<WalletType> = { id: 0 };
-			TypesOfchoices.forEach((choice) => {
-				const path = `m/44'/${Object.values(choice)[0]}'/0'/0'`;
-				const { key } = derivePath(path, newSeed.toString("hex"));
-				const secret = nacl.sign.keyPair.fromSeed(key).secretKey;
-				const publicKey = Keypair.fromSecretKey(secret).publicKey.toBase58();
-				//@ts-ignore
-				currentWallet[`${Object.keys(choice)[0]}public` as keyof WalletType] = publicKey;
-				//@ts-ignore
-				currentWallet[`${Object.keys(choice)[0]}private` as keyof WalletType] = secret;
-			});
+
+			// Solana Wallet (ed25519)
+			const solPath = `m/44'/501'/0'/0'`;
+			const solKey = derivePath(solPath, newSeed.toString("hex")).key;
+			const solKeypair = nacl.sign.keyPair.fromSeed(solKey);
+			const solanaKeypair = Keypair.fromSecretKey(solKeypair.secretKey);
+			currentWallet.Solpublic = solanaKeypair.publicKey.toBase58();
+			currentWallet.Solprivate = Buffer.from(solKeypair.secretKey).toString("hex");
+
+			// Ethereum Wallet (secp256k1)
+			const ethPath = `m/44'/60'/0'/0/0`;
+			const ethWallet = HDNodeWallet.fromSeed(newSeed).derivePath(ethPath);
+			currentWallet.Ethpublic = ethWallet.address;
+			currentWallet.Ethprivate = ethWallet.privateKey;
 
 			setWal([currentWallet as WalletType]);
 		} catch (error) {
@@ -63,23 +66,27 @@ function App() {
 	};
 
 	const AddWallet = () => {
-		if (!seed || seed.length === 0) return;
+		if (!mnemonic.length) return;
 		setLoading(true);
 		try {
 			const nextId = id + 1;
 			setId(nextId);
 
 			const newWallet: Partial<WalletType> = { id: nextId };
-			TypesOfchoices.forEach((choice) => {
-				const path = `m/44'/${Object.values(choice)[0]}'/${nextId}'/0'`;
-				const { key } = derivePath(path, seed.toString("hex"));
-				const secret = nacl.sign.keyPair.fromSeed(key).secretKey;
-				const publicKey = Keypair.fromSecretKey(secret).publicKey.toBase58();
-				//@ts-ignore
-				newWallet[`${Object.keys(choice)[0]}public` as keyof WalletType] = publicKey;
-				//@ts-ignore
-				newWallet[`${Object.keys(choice)[0]}private` as keyof WalletType] = secret;
-			});
+
+			// Solana Wallet
+			const solPath = `m/44'/501'/${nextId}'/0'`;
+			const solKey = derivePath(solPath, seed.toString("hex")).key;
+			const solKeypair = nacl.sign.keyPair.fromSeed(solKey);
+			const solanaKeypair = Keypair.fromSecretKey(solKeypair.secretKey);
+			newWallet.Solpublic = solanaKeypair.publicKey.toBase58();
+			newWallet.Solprivate = Buffer.from(solKeypair.secretKey).toString("hex");
+
+			// Ethereum Wallet
+			const ethPath = `m/44'/60'/${nextId}'/0/0`;
+			const ethWallet = HDNodeWallet.fromSeed(seed).derivePath(ethPath);
+			newWallet.Ethpublic = ethWallet.address;
+			newWallet.Ethprivate = ethWallet.privateKey;
 
 			setWal((prev) => [...prev, newWallet as WalletType]);
 		} catch (error) {
@@ -102,48 +109,61 @@ function App() {
 			</header>
 
 			<div className="flex flex-col md:flex-row gap-8 max-w-6xl mx-auto">
-				<div className="flex-1">
-					<div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 shadow-lg">
-						<div className="flex justify-center md:justify-between gap-4 mb-6 flex-wrap">
-							<Button onClick={CreateWallet} loading={loading}>
-								{seed.length === 0 ? "Create New Wallet" : "Reset Wallet"}
-							</Button>
-							<Button onClick={AddWallet} disabled={seed.length === 0 || loading} loading={loading}>
-								Add Wallet
-							</Button>
-						</div>
-
-						{seed.length > 0 && (
-							<div className="mt-6">
-								<div
-									className="flex items-center justify-between mb-3 hover:backdrop-brightness-75 p-4 rounded-2xl cursor-pointer"
-									onClick={toggleMnemonic}
-								>
-									<h2 className="text-xl font-semibold">Recovery Phrase</h2>
-									<span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">🔒 Store Securely</span>
-								</div>
-								{showMnemonic ? (
-									<>
-										<div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4 bg-neutral-900/60 p-4 rounded-xl shadow">
-											{mnemonic.map((word, idx) => (
-												<Word key={idx} id={idx + 1} word={word} />
-											))}
-										</div>
-										<p className="text-xs text-gray-400 mt-3">
-											Write down this 12-word mnemonic phrase and store it securely. It can be used to recover all your
-											wallets.
-										</p>
-									</>
-								) : (
-									<div className="bg-neutral-900/60 p-4 rounded-xl shadow text-center text-gray-400">
-										Click to reveal recovery phrase
-									</div>
-								)}
+				{/* Balance */}
+				<div>
+					{seed.length > 0 && (
+						<div className="flex-1">
+							<div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 shadow-lg">
+								<Balance />
 							</div>
-						)}
+						</div>
+					)}
+
+					{/* Mnemonics */}
+					<div className="flex-1 mt-3">
+						<div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 shadow-lg">
+							<div className="flex justify-center md:justify-between gap-4 mb-6 flex-wrap">
+								<Button onClick={CreateWallet} loading={loading}>
+									{seed.length === 0 ? "Create New Wallet" : "Reset Wallet"}
+								</Button>
+								<Button onClick={AddWallet} disabled={seed.length === 0 || loading} loading={loading}>
+									Add Wallet
+								</Button>
+							</div>
+
+							{seed.length > 0 && (
+								<div className="mt-6">
+									<div
+										className="flex items-center justify-between mb-3 hover:backdrop-brightness-75 p-4 rounded-2xl cursor-pointer"
+										onClick={toggleMnemonic}
+									>
+										<h2 className="text-xl font-semibold">Recovery Phrase</h2>
+										<span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+											🔒 Store Securely
+										</span>
+									</div>
+									{showMnemonic ? (
+										<>
+											<div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4 bg-neutral-900/60 p-4 rounded-xl shadow">
+												{mnemonic.map((word, idx) => (
+													<Word key={idx} id={idx + 1} word={word} />
+												))}
+											</div>
+											<p className="text-xs text-gray-400 mt-3">
+												Write down this 12-word mnemonic phrase and store it securely. It can be used to recover all
+												your wallets.
+											</p>
+										</>
+									) : (
+										""
+									)}
+								</div>
+							)}
+						</div>
 					</div>
 				</div>
 
+				{/* Wallets */}
 				<div className="flex-1">
 					<div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 shadow-lg">
 						<h2 className="text-xl font-semibold mb-4">Generated Wallets</h2>
@@ -157,7 +177,7 @@ function App() {
 								</div>
 							) : (
 								curWal.map((wal) => (
-									<Wallet
+									<DisplayWallet
 										key={wal.id}
 										id={wal.id}
 										Solprivate={wal.Solprivate}

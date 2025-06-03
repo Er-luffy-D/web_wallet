@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { store } from "../store/store";
 
-export const Wallet = ({
+export const DisplayWallet = ({
 	id,
 	Solprivate,
 	Solpublic,
@@ -8,9 +9,9 @@ export const Wallet = ({
 	Ethpublic,
 }: {
 	id: number;
-	Solprivate: Uint8Array;
+	Solprivate: string;
 	Solpublic: string;
-	Ethprivate: Uint8Array;
+	Ethprivate: string;
 	Ethpublic: string;
 }) => {
 	const [copied, setCopied] = useState<"none" | "Solprivate" | "Solpublic" | "Ethprivate" | "Ethpublic">("none");
@@ -21,6 +22,26 @@ export const Wallet = ({
 		navigator.clipboard.writeText(text);
 		setCopied(type);
 		setTimeout(() => setCopied("none"), 1200);
+	};
+
+	const handleClick = (type: "Sol" | "Eth") => {
+		if (type === "Sol") {
+			store.dispatch({
+				type: "UPDATE",
+				payload: {
+					public: Solpublic,
+					typeofblock: "Solana",
+				},
+			});
+		} else {
+			store.dispatch({
+				type: "UPDATE",
+				payload: {
+					public: Ethpublic,
+					typeofblock: "Ethereum",
+				},
+			});
+		}
 	};
 
 	return (
@@ -36,7 +57,10 @@ export const Wallet = ({
 
 			<div className="space-y-6">
 				{/* Solana Section */}
-				<div>
+				<div
+					onClick={() => handleClick("Sol")}
+					className="cursor-pointer hover:bg-gray-800/50 p-4 rounded-lg transition"
+				>
 					<div className="flex items-center mb-3">
 						<div className="w-4 h-4 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-full mr-2"></div>
 						<h4 className="font-semibold text-indigo-400">Solana</h4>
@@ -89,7 +113,10 @@ export const Wallet = ({
 				</div>
 
 				{/* Ethereum Section */}
-				<div>
+				<div
+					onClick={() => handleClick("Eth")}
+					className="cursor-pointer hover:bg-gray-800/50 p-4 rounded-lg transition"
+				>
 					<div className="flex items-center mb-3">
 						<div className="w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full mr-2"></div>
 						<h4 className="font-semibold text-yellow-400">Ethereum</h4>
